@@ -8,7 +8,7 @@
 body {
 margin: 0;
 background-color: #1a1a1a;
-font-family: 'Malgun Gothic', sans-serif;
+font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
 display: flex;
 flex-direction: column;
 align-items: center;
@@ -16,17 +16,18 @@ justify-content: center;
 min-height: 100vh;
 overflow: hidden;
 user-select: none;
+-webkit-user-select: none;
 }
 #gameContainer {
 position: relative;
 box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 canvas {
-background-color: #22B14C; /* 청량한 사이다 초록색 /
+background-color: #22B14C; /* 사이다 초록색 /
 display: block;
 border-radius: 8px;
 }
-/ 모바일용 터치 버튼 */
+/ 하단 모바일/마우스 조작 버튼 */
 .controls {
 display: flex;
 justify-content: space-between;
@@ -41,7 +42,7 @@ width: 45%;
 height: 60px;
 background-color: #333;
 color: white;
-border: none;
+border: 2px solid #555;
 border-radius: 10px;
 font-size: 24px;
 font-weight: bold;
@@ -68,7 +69,7 @@ background-color: #555;
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-// 게임 상태
+// 게임 시스템 변수
 let player = { x: 210, y: 530, width: 60, height: 90, speed: 8 };
 let carbonation = 100;
 let score = 0;
@@ -76,44 +77,47 @@ let objects = [];
 let spawnTimer = 0;
 let gameOver = false;
 
-// 키 입력 상태
+// 입력 상태 관리
 let keys = { Left: false, Right: false };
 
-// 키보드 이벤트 리스너
+// 1. 키보드 이벤트 (PC용)
 window.addEventListener("keydown", (e) => {
-if (e.key === "ArrowLeft") keys.Left = true;
-if (e.key === "ArrowRight") keys.Right = true;
+if (e.key === "ArrowLeft" || e.key === "Left") keys.Left = true;
+if (e.key === "ArrowRight" || e.key === "Right") keys.Right = true;
 });
 window.addEventListener("keyup", (e) => {
-if (e.key === "ArrowLeft") keys.Left = false;
-if (e.key === "ArrowRight") keys.Right = false;
+if (e.key === "ArrowLeft" || e.key === "Left") keys.Left = false;
+if (e.key === "ArrowRight" || e.key === "Right") keys.Right = false;
 });
 
-// 모바일 터치 이벤트 리스너
+// 2. 터치 & 마우스 이벤트 (모바일 및 클릭용 버튼 조작)
 const leftBtn = document.getElementById("leftBtn");
 const rightBtn = document.getElementById("rightBtn");
 
+// 터치 이벤트
 leftBtn.addEventListener("touchstart", (e) => { e.preventDefault(); keys.Left = true; });
 leftBtn.addEventListener("touchend", () => keys.Left = false);
 rightBtn.addEventListener("touchstart", (e) => { e.preventDefault(); keys.Right = true; });
 rightBtn.addEventListener("touchend", () => keys.Right = false);
 
-// 마우스 클릭도 지원 (테스트용)
+// 마우스 이벤트 백업
 leftBtn.addEventListener("mousedown", () => keys.Left = true);
 leftBtn.addEventListener("mouseup", () => keys.Left = false);
+leftBtn.addEventListener("mouseleave", () => keys.Left = false);
 rightBtn.addEventListener("mousedown", () => keys.Right = true);
 rightBtn.addEventListener("mouseup", () => keys.Right = false);
+rightBtn.addEventListener("mouseleave", () => keys.Right = false);
 
-// 오브젝트 스폰 함수 (0: 멘토스, 1: 기포)
+// 오브젝트(멘토스/기포) 생성 함수
 function spawnObject() {
-let type = Math.random() < 0.4 ? 0 : 1;
+let type = Math.random() < 0.4 ? 0 : 1; // 0: 멘토스(장애물), 1: 기포(아이템)
 let x = Math.random() * (canvas.width - 30);
 let y = -30;
 let speed = 4 + Math.random() * 4;
 objects.push({ x, y, speed, type });
 }
 
-// 재시작 함수
+// 게임 리셋 함수
 function resetGame() {
 player.x = canvas.width / 2 - player.width / 2;
 carbonation = 100;
@@ -121,136 +125,143 @@ score = 0;
 objects = [];
 spawnTimer = 0;
 gameOver = false;
-update();
 }
 
-// 캔버스 클릭 시 재시작 판정
+// 게임오버 시 클릭하면 재시작
 canvas.addEventListener("click", () => {
-if (gameOver) resetGame();
+if (gameOver) {
+resetGame();
+}
 });
 
-// 메인 게임 루프
+// 메인 루프 엔진
 function update() {
-if (gameOver) return;
-
-// 1. 탄산 감소 로직 (프레임당 일정량 감소)
+// 1. 게이머 로직 업데이트
+if (!gameOver) {
+// 자연적인 탄산 감소
 carbonation -= 0.15;
 if (carbonation <= 0) {
 carbonation = 0;
 gameOver = true;
 }
 
-// 2. 플레이어 이동
+// 플레이어 좌우 이동 범위 제한
 if (keys.Left && player.x > 0) player.x -= player.speed;
 if (keys.Right && player.x < canvas.width - player.width) player.x += player.speed;
 
-// 3. 오브젝트 생성
+// 아이템 스폰 타이머
 spawnTimer++;
-if (spawnTimer > 22) {
+if (spawnTimer > 20) {
 spawnObject();
 spawnTimer = 0;
 }
 
-// 4. 오브젝트 이동 및 충돌 검사
+// 오브젝트 이동 및 충돌 판정
 for (let i = objects.length - 1; i >= 0; i--) {
 let obj = objects[i];
 obj.y += obj.speed;
 
-// 화면 밖으로 나가면 삭제
+// 화면 밑으로 떨어지면 제거
 if (obj.y > canvas.height) {
 objects.splice(i, 1);
 continue;
 }
 
-// 충돌 판정 (Rect vs Rect 단순화)
+// 충돌 박스 검사 (AABB 충돌 이론)
 if (obj.x < player.x + player.width &&
 obj.x + 30 > player.x &&
 obj.y < player.y + player.height &&
 obj.y + 30 > player.y) {
 
-if (obj.type === 0) { // 멘토스 폭발!
-carbonation -= 30;
+if (obj.type === 0) { // 멘토스 밟음 (감소)
+carbonation -= 25;
 if (carbonation < 0) carbonation = 0;
-} else { // 탄산 기포 흡수!
+} else { // 기포 먹음 (충전)
 carbonation += 15;
 if (carbonation > 100) carbonation = 100;
 score += 10;
 }
-objects.splice(i, 1);
+objects.splice(i, 1); // 먹었으니 제거
+}
 }
 }
 
-// 5. 그리기 작업
+// 2. 화면 그리기 (렌더링)
 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-// 플레이어 (사이다 캔) 그리기
+// [플레이어: 사이다 캔] - 호환성 높은 기본 사각형으로 드로잉
 ctx.fillStyle = "#FFFFFF";
-ctx.beginPath();
-ctx.roundRect(player.x, player.y, player.width, player.height, 10);
-ctx.fill();
-// 캔 뚜껑 선
-ctx.strokeStyle = "#CCCCCC";
-ctx.lineWidth = 5;
+ctx.fillRect(player.x, player.y, player.width, player.height);
+
+// 캔 따개 부분 포인트 선
+ctx.strokeStyle = "#D1D1D1";
+ctx.lineWidth = 6;
 ctx.beginPath();
 ctx.moveTo(player.x, player.y + 15);
 ctx.lineTo(player.x + player.width, player.y + 15);
 ctx.stroke();
 
-// 떨어지는 오브젝트 그리기
-objects.forEach(obj => {
+// [떨어지는 요소들]
+for (let i = 0; i < objects.length; i++) {
+let obj = objects[i];
 ctx.beginPath();
-if (obj.type === 0) { // 멘토스
+if (obj.type === 0) {
+// 멘토스 (흰색 원 + 검은 테두리)
 ctx.arc(obj.x + 15, obj.y + 15, 15, 0, Math.PI * 2);
-ctx.fillStyle = "#F0F0F0";
+ctx.fillStyle = "#F3F3F3";
 ctx.fill();
-ctx.strokeStyle = "#000000";
+ctx.strokeStyle = "#333333";
 ctx.lineWidth = 2;
 ctx.stroke();
-} else { // 기포
-ctx.arc(obj.x + 15, obj.y + 15, 10, 0, Math.PI * 2);
+} else {
+// 탄산 기포 (노란색 원)
+ctx.arc(obj.x + 15, obj.y + 15, 11, 0, Math.PI * 2);
 ctx.fillStyle = "#FFF200";
 ctx.fill();
 }
-});
-
-// UI 그리기
-ctx.fillStyle = "#FFFFFF";
-ctx.font = "bold 24px 'Malgun Gothic'";
-ctx.fillText(SCORE: ${score}`, 20, 40);
-ctx.fillText("CARBONATION:", 20, 80);
-
-// 탄산 게이지 바
-ctx.strokeStyle = "#000000";
-ctx.lineWidth = 2;
-ctx.strokeRect(210, 62, 200, 20);
-
-if (carbonation > 0) {
-ctx.fillStyle = carbonation > 30 ? "#FFF200" : "#FF0000";
-ctx.fillRect(212, 64, (196 * (carbonation / 100)), 16);
 }
 
-// 게임 오버 화면
+// [상단 UI 계기판]
+ctx.fillStyle = "#FFFFFF";
+ctx.font = "bold 22px 'Malgun Gothic', sans-serif";
+ctx.fillText("SCORE: " + score, 20, 40);
+ctx.fillText("CARBONATION:", 20, 80);
+
+// 탄산 게이지 아웃라인
+ctx.strokeStyle = "#FFFFFF";
+ctx.lineWidth = 2;
+ctx.strokeRect(210, 62, 200, 22);
+
+// 탄산 게이지 채우기
+if (carbonation > 0) {
+ctx.fillStyle = carbonation > 30 ? "#FFF200" : "#FF3333"; // 위험할 땐 빨간색 변환
+ctx.fillRect(213, 65, Math.floor(194 * (carbonation / 100)), 16);
+}
+
+// [게임오버 오버레이]
 if (gameOver) {
-ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
 ctx.fillStyle = "#FFFFFF";
-ctx.font = "bold 36px 'Malgun Gothic'";
+ctx.font = "bold 34px 'Malgun Gothic', sans-serif";
 ctx.textAlign = "center";
 ctx.fillText("김이 다 빠졌습니다!", canvas.width / 2, canvas.height / 2 - 40);
 
-ctx.font = "24px 'Malgun Gothic'";
-ctx.fillText(최종 점수:${score}`, canvas.width / 2, canvas.height / 2 + 10);
+ctx.font = "22px 'Malgun Gothic', sans-serif";
+ctx.fillText("최종 스코어: " + score + "점", canvas.width / 2, canvas.height / 2 + 10);
 
 ctx.fillStyle = "#FFF200";
+ctx.font = "bold 20px 'Malgun Gothic', sans-serif";
 ctx.fillText("화면을 클릭하면 다시 시작합니다", canvas.width / 2, canvas.height / 2 + 70);
-ctx.textAlign = "left"; // 원상복구
+ctx.textAlign = "left"; // 정렬 초기화
 }
 
+// 브라우저 프레임 동기화 재귀 호출
 requestAnimationFrame(update);
 }
 
-// 게임 시작
+// 최초 실행 게임 스타트
 update();
 </script>
 
